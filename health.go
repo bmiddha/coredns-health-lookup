@@ -19,6 +19,7 @@ var log = clog.NewWithPlugin("health")
 type health struct {
 	Addr      string
 	lameduck  time.Duration
+	lookup    []string
 	healthURI *url.URL
 
 	ln      net.Listener
@@ -55,9 +56,23 @@ func (h *health) OnStartup() error {
 	h.nlSetup = true
 
 	h.mux.HandleFunc(h.healthURI.Path, func(w http.ResponseWriter, r *http.Request) {
-		// We're always healthy.
-		w.WriteHeader(http.StatusOK)
-		io.WriteString(w, http.StatusText(http.StatusOK))
+		status := http.StatusOK
+
+		if len(h.lookup) > 0 {
+			for _, l := range h.lookup {
+				log.Infof("Looking up %s", l)
+				_, err := net.LookupHost(l)
+				if err != nil {
+					log.Errorf("Lookup for %s failed: %s", l, err)
+					status = http.StatusInternalServerError
+					break
+				}
+				log.Infof("Lookup for %s succeeded", l)
+			}
+		}
+
+		w.WriteHeader(status)
+		io.WriteString(w, http.StatusText(status))
 	})
 
 	ctx := context.Background()

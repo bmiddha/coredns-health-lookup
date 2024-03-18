@@ -12,12 +12,12 @@ import (
 func init() { plugin.Register("health", setup) }
 
 func setup(c *caddy.Controller) error {
-	addr, lame, err := parse(c)
+	addr, lame, lookup, err := parse(c)
 	if err != nil {
 		return plugin.Error("health", err)
 	}
 
-	h := &health{Addr: addr, lameduck: lame}
+	h := &health{Addr: addr, lameduck: lame, lookup: lookup}
 
 	c.OnStartup(h.OnStartup)
 	c.OnRestart(h.OnReload)
@@ -28,9 +28,10 @@ func setup(c *caddy.Controller) error {
 	return nil
 }
 
-func parse(c *caddy.Controller) (string, time.Duration, error) {
+func parse(c *caddy.Controller) (string, time.Duration, []string, error) {
 	addr := ""
 	dur := time.Duration(0)
+	var lookup []string
 	for c.Next() {
 		args := c.RemainingArgs()
 
@@ -39,10 +40,10 @@ func parse(c *caddy.Controller) (string, time.Duration, error) {
 		case 1:
 			addr = args[0]
 			if _, _, e := net.SplitHostPort(addr); e != nil {
-				return "", 0, e
+				return "", 0, nil, e
 			}
 		default:
-			return "", 0, c.ArgErr()
+			return "", 0, nil, c.ArgErr()
 		}
 
 		for c.NextBlock() {
@@ -50,17 +51,24 @@ func parse(c *caddy.Controller) (string, time.Duration, error) {
 			case "lameduck":
 				args := c.RemainingArgs()
 				if len(args) != 1 {
-					return "", 0, c.ArgErr()
+					return "", 0, nil, c.ArgErr()
 				}
 				l, err := time.ParseDuration(args[0])
 				if err != nil {
-					return "", 0, fmt.Errorf("unable to parse lameduck duration value: '%v' : %v", args[0], err)
+					return "", 0, nil, fmt.Errorf("unable to parse lameduck duration value: '%v' : %v", args[0], err)
 				}
 				dur = l
+			case "lookup":
+				for c.NextArg() {
+					lookup = append(lookup, c.Val())
+				}
+				if len(lookup) == 0 {
+					return "", 0, nil, c.ArgErr()
+				}
 			default:
-				return "", 0, c.ArgErr()
+				return "", 0, nil, c.ArgErr()
 			}
 		}
 	}
-	return addr, dur, nil
+	return addr, dur, lookup, nil
 }

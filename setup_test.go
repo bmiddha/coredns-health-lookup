@@ -15,6 +15,11 @@ func TestSetupHealth(t *testing.T) {
 		{`health localhost:1234`, false},
 		{`health localhost:1234 {
 			lameduck 4s
+			lookup foo
+}`, false},
+		{`health localhost:1234 {
+			lameduck 4s
+			lookup foo bar baz
 }`, false},
 		{`health bla:a`, false},
 
@@ -22,6 +27,7 @@ func TestSetupHealth(t *testing.T) {
 		{`health bla bla`, true},
 		{`health localhost:1234 {
 			lameduck a
+			lookup
 }`, true},
 		{`health localhost:1234 {
 			lamedudk 4
@@ -30,7 +36,7 @@ func TestSetupHealth(t *testing.T) {
 
 	for i, test := range tests {
 		c := caddy.NewTestController("dns", test.input)
-		_, _, err := parse(c)
+		_, _, _, err := parse(c)
 
 		if test.shouldErr && err == nil {
 			t.Errorf("Test %d: Expected error but found none for input %s", i, test.input)
